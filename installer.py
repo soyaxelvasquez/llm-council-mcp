@@ -5,45 +5,67 @@ from pathlib import Path
 
 def check_and_install():
     """
-    Quietly registers the MCP server in the local configuration if not present.
-    Supports VSCode/Cursor (Claude Dev / Roo Code) standard paths.
+    Registers the MCP server with detailed verbose output.
+    Robust handling for empty/malformed config files.
     """
-    if os.name == "nt": # Windows
-        config_dir = Path(os.getenv("APPDATA")) / "Code/User/globalStorage/saoudrizwan.claude-dev/settings"
-    else: # macOS/Linux
-        config_dir = Path.home() / "Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings"
+    print("\n--- [MCP SETUP] Iniciando Auto-Configuracion ---")
     
-    config_path = config_dir / "mcp_config.json"
+    paths = [
+        Path.home() / ".gemini/antigravity/mcp_config.json",
+        Path(os.getenv("APPDATA", "")) / "Code/User/globalStorage/saoudrizwan.claude-dev/settings/mcp_config.json",
+        Path.home() / "Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/mcp_config.json"
+    ]
     
-    if not config_path.exists():
-        # Try alternate path for Roo Code
-        config_path = config_path.parent.parent.parent / "roovet.roo-ignore/settings/mcp_config.json"
-        if not config_path.exists():
-            return
+    config_path = None
+    print(f"[*] Buscando archivo de configuracion en {len(paths)} ubicaciones...")
+    
+    for p in paths:
+        if p.exists():
+            config_path = p
+            print(f"[+] Encontrado: {p}")
+            break
+    
+    if config_path is None:
+        print("[!] ERROR: No se encontro ningun archivo mcp_config.json.")
+        return
 
     try:
+        content = ""
         with open(config_path, "r") as f:
-            config = json.load(f)
+            content = f.read().strip()
+            
+        if not content:
+            print("[i] Archivo vacio. Inicializando...")
+            config = {"mcpServers": {}}
+        else:
+            try:
+                config = json.loads(content)
+            except json.JSONDecodeError:
+                print("[!] Error de formato JSON. Re-inicializando...")
+                config = {"mcpServers": {}}
         
         server_name = "llm-council-smart"
-        server_path = str(Path(__file__).parent / "server.py")
+        server_path = str(Path(__file__).parent.absolute() / "server.py")
         
-        # Check if already registered
-        servers = config.get("mcpServers", {})
-        if server_name not in servers:
-            config.setdefault("mcpServers", {})[server_name] = {
-                "command": sys.executable,
-                "args": [server_path],
-                "env": {"SMART_MCP_AUTO": "true"},
-                "disabled": False
-            }
+        if "mcpServers" not in config:
+            config["mcpServers"] = {}
             
-            with open(config_path, "w") as f:
-                json.dump(config, f, indent=2)
-            print(f">>> [MCP] Council registered automatically in {config_path.name}")
+        print(f"[*] Registrando servidor: '{server_name}'")
+        config["mcpServers"][server_name] = {
+            "command": sys.executable,
+            "args": [server_path],
+            "env": {"SMART_MCP_AUTO": "true"},
+            "disabled": False
+        }
+        
+        with open(config_path, "w") as f:
+            json.dump(config, f, indent=2)
+        print(f"[SUCCESS] Registro completado en {config_path.name}")
+            
     except Exception as e:
-        # Silent fail to not disrupt the main process
-        pass
+        print(f"[!] ERROR: {str(e)}")
+
+    print("--- [MCP SETUP] Finalizado ---\n")
 
 if __name__ == "__main__":
     check_and_install()

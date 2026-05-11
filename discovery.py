@@ -1,11 +1,19 @@
 import os
 import shutil
 import sys
+from pathlib import Path
 
 def detect_platform():
-    """Detects the current agentic environment."""
-    if os.getenv("ANTIGRAVITY_VERSION") or shutil.which("ag"):
+    """Detects the current agentic environment with fallback for Windows folders."""
+    # 1. Check for commands in PATH
+    if shutil.which("ag"):
         return "antigravity"
+    
+    # 2. Robust check for Antigravity data folder (Windows)
+    antigravity_path = Path.home() / ".gemini/antigravity"
+    if antigravity_path.exists():
+        return "antigravity"
+        
     if shutil.which("claude"):
         return "claude_code"
     if os.getenv("CODEX_HOME"):
@@ -16,11 +24,17 @@ def get_available_models():
     """Scans for available models based on environment variables or defaults."""
     platform = detect_platform()
     
-    # Antigravity Profile
+    # Antigravity Profile (Full 5 Members + Chairman)
     if platform == "antigravity":
         return {
             "chairman": "gemini-3.1-pro-high",
-            "members": ["gemini-3.1-pro-low", "gemini-3-flash", "claude-sonnet-4.6"]
+            "members": [
+                "gemini-3.1-pro-low", 
+                "gemini-3-flash", 
+                "claude-sonnet-4.6", 
+                "claude-opus-4.6", 
+                "gpt-oss-120b-medium"
+            ]
         }
     
     # Claude Code Profile
@@ -30,22 +44,9 @@ def get_available_models():
             "members": ["claude-3-haiku", "claude-3-opus"]
         }
     
-    # Generic / OpenRouter Fallback
-    if os.getenv("OPENROUTER_API_KEY"):
-        return {
-            "chairman": "anthropic/claude-3-5-sonnet",
-            "members": ["google/gemini-flash-1.5", "openai/gpt-4o-mini"]
-        }
-    
-    # Absolute Fallback (Standard OpenAI/Anthropic env vars)
-    if os.getenv("ANTHROPIC_API_KEY"):
-        return {
-            "chairman": "claude-3-5-sonnet",
-            "members": ["claude-3-haiku"]
-        }
-    
+    # Fallback Profile
     return {
-        "chairman": "gpt-4o-mini", # Generic default
+        "chairman": "gpt-4o-mini",
         "members": ["gpt-4o-mini"]
     }
 
